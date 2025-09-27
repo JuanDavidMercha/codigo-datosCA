@@ -1,0 +1,70 @@
+name: Captura de aire cada hora
+
+on:
+  schedule:
+    - cron: "0 * * * *"     # cada hora (UTC)
+  workflow_dispatch: {}      # botón para ejecutarlo manualmente
+
+jobs:
+  ejecutar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    concurrency:
+      group: captura-aire-cada-hora
+      cancel-in-progress: false
+
+    steps:
+      - name: Obtener código del repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Instalar dependencias
+        run: |
+          pip install -U pip
+          pip install pandas requests pytz pydrive2
+
+      - name: Ejecutar script (genera CSV en ./salida)
+        run: |
+          mkdir -p salida
+          python captura_datos.py
+
+      - name: Subir CSV a Google Drive
+        env:
+          DRIVE_SA_JSON: ${{ secrets.DRIVE_SA_JSON }}       # Secret 1: JSON de Service Account
+          ID_CARPETA_DRIVE: ${{ secrets.ID_CARPETA_DRIVE }} # Secret 2: ID de carpeta en Drive
+        run: |
+          python - << 'PY'
+import os, json, glob, datetime
+from pydrive2.auth import GoogleAuth
+from pydrive2.drive import GoogleDrive
+from pydrive2.auth import ServiceAccountCredentials
+
+# 1) Autenticación con Service Account (viene del Secret)
+sa_info = json.loads(os.environ["DRIVE_SA_JSON"])
+scope = ["https://www.googleapis.com/auth/drive.file"]
+gauth = GoogleAuth()
+gauth.credentials = ServiceAccountCredentials.from_json_keyfile_dict(sa_info, scope)
+drive = GoogleDrive(gauth)
+
+# 2) Carpeta destino en Drive (viene del Secret)
+id_carpeta = os.environ["ID_CARPETA_DRIVE"]
+
+# (Opcional) Crear subcarpeta por hora en UTC para organizar ejecuciones
+sello = datetime.datetime.utcnow().strftime("%Y-%m-%d_%H00UTC")
+sub = drive.CreateFile({"title": sello, "mimeType": "application/vnd.google-apps.folder",
+                        "parents": [{"id": id_carpeta}]})
+sub.Upload()
+id_sub = sub["id"]
+
+# 3) Subir todos los CSV generados
+for ruta in glob.glob("salida/*.csv"):
+    nombre = os.path.basename(ruta)
+    f = drive.CreateFile({"title": nombre, "parents": [{"id": id_sub}]})
+    f.SetContentFile(ruta)
+    f.Upload()
+    print("Subido a Drive:", ruta)
+PY
