@@ -1,9 +1,9 @@
-name: Captura de aire cada hora
+name: Captura aire cada hora
 
 on:
   schedule:
-    - cron: "0 * * * *"        # cada hora (UTC)
-  workflow_dispatch: {}         # permite ejecutarlo manualmente desde Actions
+    - cron: '0 * * * *'   # cada hora (UTC)
+  workflow_dispatch:
 
 jobs:
   ejecutar:
@@ -20,10 +20,11 @@ jobs:
       - name: Configurar Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: '3.11'
 
       - name: Instalar dependencias
         run: |
+          python -V
           pip install -U pip
           pip install pandas requests pytz pydrive2
 
@@ -34,13 +35,12 @@ jobs:
 
       - name: Verificar existencia de secrets (sin mostrar contenido)
         run: |
-          if [ -z "${{ secrets.DRIVE_SA_JSON }}" ]; then echo "FALTA DRIVE_SA_JSON"; exit 1; fi
-          if [ -z "${{ secrets.ID_CARPETA_DRIVE }}" ]; then echo "FALTA ID_CARPETA_DRIVE"; exit 1; fi
-          echo "Secrets OK."
+          test -n "${{ secrets.DRIVE_SA_JSON }}" || (echo "FALTA DRIVE_SA_JSON" && exit 1)
+          test -n "${{ secrets.ID_CARPETA_DRIVE }}" || (echo "FALTA ID_CARPETA_DRIVE" && exit 1)
+          echo "Secrets OK"
 
       - name: Subir CSV a Google Drive
         env:
           DRIVE_SA_JSON: ${{ secrets.DRIVE_SA_JSON }}
           ID_CARPETA_DRIVE: ${{ secrets.ID_CARPETA_DRIVE }}
-        run: |
-          python subir_a_drive.py
+        run: python subir_a_drive.py
