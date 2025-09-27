@@ -24,7 +24,6 @@ jobs:
 
       - name: Instalar dependencias
         run: |
-          python -V
           pip install -U pip
           pip install pandas requests pytz pydrive2
 
@@ -33,10 +32,18 @@ jobs:
           mkdir -p salida
           python captura_datos.py
 
-      - name: Verificar existencia de secrets (sin mostrar contenido)
+      # ✅ Verificación segura (funciona con secretos multilínea)
+      - name: Verificar existencia de secrets (seguro)
+        env:
+          HAS_DRIVE_SA_JSON: ${{ secrets.DRIVE_SA_JSON != '' }}
+          HAS_ID_CARPETA: ${{ secrets.ID_CARPETA_DRIVE != '' }}
         run: |
-          test -n "${{ secrets.DRIVE_SA_JSON }}" || (echo "FALTA DRIVE_SA_JSON" && exit 1)
-          test -n "${{ secrets.ID_CARPETA_DRIVE }}" || (echo "FALTA ID_CARPETA_DRIVE" && exit 1)
+          if [ "$HAS_DRIVE_SA_JSON" != "true" ]; then
+            echo "FALTA DRIVE_SA_JSON"; exit 1
+          fi
+          if [ "$HAS_ID_CARPETA" != "true" ]; then
+            echo "FALTA ID_CARPETA_DRIVE"; exit 1
+          fi
           echo "Secrets OK"
 
       - name: Subir CSV a Google Drive
